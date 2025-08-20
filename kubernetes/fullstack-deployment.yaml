@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fullstack-deployment
+  namespace: my-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fullstack
+  template:
+    metadata:
+      labels:
+        app: fullstack
+    spec:
+      containers:
+        - name: backend
+          image: pangasathish/my-backend:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: BACKEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: backend
+        - name: frontend
+          image: pangasathish/my-frontend:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: frontend

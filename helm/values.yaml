@@ -1,0 +1,64 @@
+replicaCount: 1
+
+frontend:
+  image:
+    repository: pangasathish/my-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+backend:
+  image:
+    repository: pangasathish/my-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  frontendPort: 3000
+  backendPort: 5000
+
+ingress:
+  enabled: true
+  className: nginx
+  frontendHost: f.ai4devops.online
+  backendHost: b.ai4devops.online
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # runAsUser: 1000
+  # runAsGroup: 3000
+  # fsGroup: 2000
+
+resources: {}
+#  requests:
+#    cpu: 100m
+#    memory: 128Mi
+#  limits:
+#    cpu: 200m
+#    memory: 256Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
