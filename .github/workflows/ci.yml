@@ -66,7 +66,7 @@ jobs:
       # Trivy scan for backend
       - name: Scan backend image with Trivy
         id: trivy-backend
-        uses: aquasecurity/trivy-action@v0.14.0
+        uses: aquasecurity/trivy-action@v0.31.0
         with:
           image-ref: pangasathish/my-backend:${{ env.VERSION }}
 
