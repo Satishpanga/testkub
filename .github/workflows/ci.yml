@@ -61,12 +61,12 @@ jobs:
       # Build backend Docker image
       - name: Build backend Docker image
         run: |
-          docker build -t pangasathish/my-backend:${{ env.VERSION }} ./backend
+          docker build --network=host -t pangasathish/my-backend:${{ env.VERSION }} ./backend
 
       # Build frontend Docker image
       - name: Build frontend Docker image
         run: |
-          docker build -t pangasathish/my-frontend:${{ env.VERSION }} ./frontend
+          docker build --network=host -t pangasathish/my-frontend:${{ env.VERSION }} ./frontend
 
       # Trivy scan for backend
       - name: Scan backend image with Trivy
