@@ -35,16 +35,22 @@ jobs:
           VERSION=$(node -p "require('./frontend/package.json').version")
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      # SonarQube scan (token via env, not with:)
+      # SonarQube scan (using modern official action)
       - name: SonarQube Scan
-        uses: sonarsource/sonarcloud-github-action@v2
-        with:
-          projectBaseDir: .
-          args: >
-            -Dsonar.projectKey=your_project_key
-            -Dsonar.host.url=${{ env.SONAR_HOST_URL }}
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=Vcruitai
+
+      # Optional: SonarQube Quality Gate blocker (uncomment to enable)
+      # - name: SonarQube Quality Gate Check
+      #   uses: SonarSource/sonarqube-quality-gate-action@v1
+      #   timeout-minutes: 5
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       # Notify Mattermost on SonarQube errors
       - name: Notify Mattermost on SonarQube issues
