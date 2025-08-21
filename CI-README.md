@@ -13,7 +13,9 @@ on:
       - 'kubernetes/**'
 
 env:
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
   SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  MATTERMOST_WEBHOOK: ${{ secrets.MATTERMOST_WEBHOOK }}
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -24,7 +26,7 @@ jobs:
       # Checkout code
       - uses: actions/checkout@v4
 
-      # Setup Node.js environment
+      # Setup Node.js (required for frontend/backend build)
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
@@ -35,22 +37,21 @@ jobs:
           VERSION=$(node -p "require('./frontend/package.json').version")
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      # SonarQube scan (token via env, not with:)
+      # SonarQube scan
       - name: SonarQube Scan
         uses: sonarsource/sonarcloud-github-action@v2
         with:
           projectBaseDir: .
+          sonarToken: ${{ env.SONAR_TOKEN }}
           args: >
             -Dsonar.projectKey=your_project_key
             -Dsonar.host.url=${{ env.SONAR_HOST_URL }}
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       # Notify Mattermost on SonarQube errors
-      - name: Notify Mattermost on SonarQube issues
+      - name: Notify on SonarQube issues
         if: failure()
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"SonarQube test failed in CI."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"SonarQube test failed in CI."}' ${{ env.MATTERMOST_WEBHOOK }}
 
       # Build backend Docker image
       - name: Build backend Docker image
@@ -72,7 +73,7 @@ jobs:
       - name: Notify Mattermost on Trivy backend scan errors
         if: ${{ failure() && steps.trivy-backend.outcome == 'failure' }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for backend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for backend image."}' ${{ env.MATTERMOST_WEBHOOK }}
 
       # Trivy scan for frontend
       - name: Scan frontend image with Trivy
@@ -84,7 +85,7 @@ jobs:
       - name: Notify Mattermost on Trivy frontend scan errors
         if: ${{ failure() && steps.trivy-frontend.outcome == 'failure' }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for frontend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for frontend image."}' ${{ env.MATTERMOST_WEBHOOK }}
 
       # Login to DockerHub
       - name: Login to DockerHub
@@ -111,4 +112,25 @@ jobs:
       - name: Notify on CI Success
         if: success()
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"CI completed successfully with version ${{ env.VERSION }}."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"CI completed successfully with version ${{ env.VERSION }}."}' ${{ env.MATTERMOST_WEBHOOK }}
+
+
+
+
+
+    #   Update image tags in Helm Charts and manifests
+    #   - name: Update image tags
+    #     run: |
+    #       find helm/ kubernetes/ -type f -exec sed -i "s|pangasathish/my-frontend:.*|pangasathish/my-frontend:${{ env.VERSION }}|g" {} +
+    #       find helm/ kubernetes/ -type f -exec sed -i "s|pangasathish/my-backend:.*|pangasathish/my-backend:${{ env.VERSION }}|g" {} +
+    #       git config user.name github-actions
+    #       git config user.email github-actions@github.com
+    #       git add helm/ kubernetes/
+    #       git commit -m "Update Docker image tags to ${{ env.VERSION }}" || echo "No changes to commit"
+    #       git push
+
+    #   - name: Notify on CI Success
+        # if: success()
+    #     run: |
+    #       curl -X POST -H 'Content-type: application/json' --data '{"text":"CI completed successfully with version ${{ env.VERSION }}."}' ${{ env.MATTERMOST_WEBHOOK }}
+
