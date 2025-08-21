@@ -19,7 +19,7 @@ env:
 
 jobs:
   test-and-build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted        #runs-on: ubuntu-latest
     steps:
       # Checkout code
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
           args: >
             -Dsonar.projectKey=Vcruitai
 
-      # Optional: SonarQube Quality Gate blocker (uncomment to enable)
+      # Optional: Quality Gate (uncomment to use)
       # - name: SonarQube Quality Gate Check
       #   uses: SonarSource/sonarqube-quality-gate-action@v1
       #   timeout-minutes: 5
@@ -94,7 +94,8 @@ jobs:
 
       # Login to DockerHub
       - name: Login to DockerHub
-        run: echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+        run: |
+          echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
 
       # Push images to DockerHub
       - name: Push backend
