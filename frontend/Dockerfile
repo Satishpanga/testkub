@@ -1,18 +1,63 @@
-# node block
-FROM node:alpine3.18 as nodework
+
+# ========================
+# Stage 1: Node Build Stage
+# ========================
+FROM node:18-alpine3.18 AS nodework
+
 WORKDIR /app
-COPY  package.json .
-RUN npm install
+
+# Install CA certificates for HTTPS
+RUN apk add --no-cache ca-certificates
+
+# Copy dependency files first for better caching
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm ci --legacy-peer-deps
+
+# Copy rest of the source code
 COPY . .
+
+# Build React app
 RUN npm run build
 
-# nginx block
+# ========================
+# Stage 2: Nginx Production Stage
+# ========================
 FROM nginx:1.23-alpine
+
+# Set working directory
 WORKDIR /usr/share/nginx/html
-RUN rm -rf ./*!SECTION
+
+# Remove default Nginx content
+RUN rm -rf ./*
+
+# Copy React build from Node stage
 COPY --from=nodework /app/build .
-# EXPOSE 80
-ENTRYPOINT [ "nginx", "-g", "daemon off;" ]
+
+# Expose port 3000
+EXPOSE 3000
+
+# Start Nginx
+ENTRYPOINT ["nginx", "-g", "daemon off;"]
+
+
+
+# # node block
+# FROM node:alpine3.18 as nodework
+# WORKDIR /app
+# COPY  package.json .
+# RUN npm install
+# COPY . .
+# RUN npm run build
+
+# # nginx block
+# FROM nginx:1.23-alpine
+# WORKDIR /usr/share/nginx/html
+# RUN rm -rf ./*!SECTION
+# COPY --from=nodework /app/build .
+# # EXPOSE 80
+# ENTRYPOINT [ "nginx", "-g", "daemon off;" ]
 
 
 
