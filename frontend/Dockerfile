@@ -1,23 +1,17 @@
-# Stage 1: Build the application
-FROM node:20-alpine AS build
-
+# node block
+FROM node:alpine3.18 as nodework
 WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci --production
-
+COPY  package.json .
+RUN npm install
 COPY . .
+RUN npm run build
 
-RUN npm run build # Or your specific build command (e.g., yarn build)
-
-# Stage 2: Serve the application with a web server (e.g., Nginx)
-FROM nginx:alpine
-
-COPY --from=build /app/dist /usr/share/nginx/html # Adjust '/app/dist' to your build output directory
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+# nginx block
+FROM nginx:1.23-alpine
+WORKDIR /usr/share/nginx/html
+RUN rm -rf ./*!SECTION
+COPY --from=nodework /app/build .
+ENTRYPOINT [ "nginx", "-g", "daemon off;" ]
 
 
 
