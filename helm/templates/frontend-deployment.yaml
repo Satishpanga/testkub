@@ -8,11 +8,11 @@ spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ include "my-frontend.name" . }}
+      app.kubernetes.io/name: {{ include "my-frontend.fullname" . }}
   template:
     metadata:
       labels:
-        app: {{ include "my-frontend.name" . }}
+        app.kubernetes.io/name: {{ include "my-frontend.fullname" . }}
     spec:
       containers:
         - name: frontend
@@ -23,9 +23,3 @@ spec:
           env:
             - name: HOST
               value: "0.0.0.0"
-        - name: backend
-          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
-          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
-          ports:
-            - containerPort: 5000
-

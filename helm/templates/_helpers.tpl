@@ -1,24 +1,21 @@
-{{/*
-Return the name of the chart
-*/}}
-{{- define "my-frontend.name" -}}
-{{- .Chart.Name -}}
-{{- end -}}
+{{- define "my-fullstack.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
+{{- end }}
 
-{{/*
-Return the fullname of the release
-*/}}
 {{- define "my-frontend.fullname" -}}
-{{- printf "%s-%s" .Release.Name .Chart.Name | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
+{{- printf "%s-frontend" (include "my-fullstack.name" .) | trunc 63 | trimSuffix "-" -}}
+{{- end }}
 
-{{/*
-Common labels
-*/}}
 {{- define "my-frontend.labels" -}}
-app.kubernetes.io/name: {{ include "my-frontend.name" . }}
+app.kubernetes.io/name: {{ include "my-frontend.fullname" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/version: {{ .Chart.AppVersion }}
-app.kubernetes.io/managed-by: {{ .Release.Service }}
-{{- end -}}
+{{- end }}
 
+{{- define "my-backend.fullname" -}}
+{{- printf "%s-backend" (include "my-fullstack.name" .) | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
+{{- define "my-backend.labels" -}}
+app.kubernetes.io/name: {{ include "my-backend.fullname" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
