@@ -3,9 +3,9 @@ FROM node:18-alpine AS build
 
 WORKDIR /app
 
-# Install dependencies (only production)
+# Install all dependencies (needed for build, don't use --only=production)
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy source code and build
 COPY . .
@@ -14,16 +14,46 @@ RUN npm run build
 # ---------- Stage 2: Serve with Nginx ----------
 FROM nginx:alpine
 
-# Clean default files
+# Clean default NGINX web files
 RUN rm -rf /usr/share/nginx/html/*
 
-# Copy built React files
+# Copy built React files from build stage
 COPY --from=build /app/build /usr/share/nginx/html
 
-# Expose port 80
+# Expose port 80 (the default NGINX HTTP port)
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
+
+
+
+
+# # ---------- Stage 1: Build React app ----------
+# FROM node:18-alpine AS build
+
+# WORKDIR /app
+
+# # Install dependencies (only production)
+# COPY package*.json ./
+# RUN npm ci --only=production
+
+# # Copy source code and build
+# COPY . .
+# RUN npm run build
+
+# # ---------- Stage 2: Serve with Nginx ----------
+# FROM nginx:alpine
+
+# # Clean default files
+# RUN rm -rf /usr/share/nginx/html/*
+
+# # Copy built React files
+# COPY --from=build /app/build /usr/share/nginx/html
+
+# # Expose port 80
+# EXPOSE 80
+
+# CMD ["nginx", "-g", "daemon off;"]
 
 
 
