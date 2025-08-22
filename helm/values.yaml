@@ -11,7 +11,7 @@ backend:
     pullPolicy: IfNotPresent
 service:
   type: LoadBalancer
-  frontendPort: 3000
+  frontendPort: 80
   backendPort: 5000
 ingress:
   enabled: true

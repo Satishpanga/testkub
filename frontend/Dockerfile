@@ -1,45 +1,45 @@
-# # node block
-# FROM node:alpine3.18 as nodework
-# WORKDIR /app
-# COPY  package.json .
-# RUN npm install
-# COPY . .
-# RUN npm run build
-
-# # nginx block
-# FROM nginx:1.23-alpine
-# WORKDIR /usr/share/nginx/html
-# RUN rm -rf ./*!SECTION
-# COPY --from=nodework /app/build .
-# EXPOSE 80
-# ENTRYPOINT [ "nginx", "-g", "daemon off;" ]
-
-
-
-# ---------- Stage 1: Build React app ----------
-FROM node:18-alpine AS build
-
+# node block
+FROM node:alpine3.18 as nodework
 WORKDIR /app
-
-# Install dependencies (only production)
-COPY package*.json ./
-RUN npm ci --only=production
-
-# Copy source code and build
+COPY  package.json .
+RUN npm install
 COPY . .
 RUN npm run build
 
-# ---------- Stage 2: Serve with Nginx ----------
-FROM nginx:alpine
-
-# Clean default files
-RUN rm -rf /usr/share/nginx/html/*
-
-# Copy built React files
-COPY --from=build /app/build /usr/share/nginx/html
-
-# Expose port 80
+# nginx block
+FROM nginx:1.23-alpine
+WORKDIR /usr/share/nginx/html
+RUN rm -rf ./*!SECTION
+COPY --from=nodework /app/build .
 EXPOSE 80
+ENTRYPOINT [ "nginx", "-g", "daemon off;" ]
+
+
+
+# # ---------- Stage 1: Build React app ----------
+# FROM node:18-alpine AS build
+
+# WORKDIR /app
+
+# # Install dependencies (only production)
+# COPY package*.json ./
+# RUN npm ci --only=production
+
+# # Copy source code and build
+# COPY . .
+# RUN npm run build
+
+# # ---------- Stage 2: Serve with Nginx ----------
+# FROM nginx:alpine
+
+# # Clean default files
+# RUN rm -rf /usr/share/nginx/html/*
+
+# # Copy built React files
+# COPY --from=build /app/build /usr/share/nginx/html
+
+# # Expose port 80
+# EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
 
