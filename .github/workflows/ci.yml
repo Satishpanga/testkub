@@ -100,11 +100,11 @@ jobs:
       # Update backend and frontend image tags in Helm values.yaml (AUTOMATED!)
       - name: Update image tags in Helm values.yaml
         run: |
-          sed -i "/backend:/,/tag:/s|^\(\s*tag:\s*\).*|\1${{ env.VERSION }}|" app1/helm/values.yaml
-          sed -i "/frontend:/,/tag:/s|^\(\s*tag:\s*\).*|\1${{ env.VERSION }}|" app1/helm/values.yaml
+          sed -i "/backend:/,/tag:/s|^\(\s*tag:\s*\).*|\1${{ env.VERSION }}|" helm/values.yaml
+          sed -i "/frontend:/,/tag:/s|^\(\s*tag:\s*\).*|\1${{ env.VERSION }}|" helm/values.yaml
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add app1/helm/values.yaml
+          git add helm/values.yaml
           git commit -m "Update backend/frontend image tags in Helm values.yaml to ${{ env.VERSION }}" || echo "No changes to commit"
           git push
 
