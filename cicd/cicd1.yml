@@ -1,0 +1,244 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'README.md'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'helm/**'
+      - 'k8s.bak/**'
+      - 'kubernetes/**'
+
+env:
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+jobs:
+  test-and-build:
+    runs-on: self-hosted
+    steps:
+      # Checkout code
+      - uses: actions/checkout@v4
+
+      # Setup Node.js environment
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # Read frontend version (for Docker tag)
+      - id: get_version
+        run: |
+          VERSION=$(node -p "require('./frontend/package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      # SonarQube scan
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=Vcruitai
+
+      # Notify Mattermost on SonarQube errors
+      - name: Notify Mattermost on SonarQube issues
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"SonarQube test failed in CI."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+
+      # Build backend Docker image
+      - name: Build backend Docker image
+        run: |
+          docker build --network=host -t pangasathish/my-backend:${{ env.VERSION }} ./backend
+
+      # Build frontend Docker image
+      - name: Build frontend Docker image
+        run: |
+          docker build --network=host -t pangasathish/my-frontend:${{ env.VERSION }} ./frontend
+
+      # Trivy scan for backend
+      - name: Scan backend image with Trivy
+        id: trivy-backend
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: pangasathish/my-backend:${{ env.VERSION }}
+
+      - name: Notify Mattermost on Trivy backend scan errors
+        if: ${{ failure() && steps.trivy-backend.outcome == 'failure' }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for backend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+
+      # Trivy scan for frontend
+      - name: Scan frontend image with Trivy
+        id: trivy-frontend
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: pangasathish/my-frontend:${{ env.VERSION }}
+
+      - name: Notify Mattermost on Trivy frontend scan errors
+        if: ${{ failure() && steps.trivy-frontend.outcome == 'failure' }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for frontend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+
+      # Login to DockerHub
+      - name: Login to DockerHub
+        run: |
+          echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+
+      # Push images to DockerHub
+      - name: Push backend
+        run: docker push pangasathish/my-backend:${{ env.VERSION }}
+
+      - name: Push frontend
+        run: docker push pangasathish/my-frontend:${{ env.VERSION }}
+
+      # Update image tags in Helm charts only (AUTOMATED!)
+      - name: Update image tags in helm/
+        run: |
+          find helm/ -type f -exec sed -i "s|pangasathish/my-frontend:.*|pangasathish/my-frontend:${{ env.VERSION }}|g" {} +
+          find helm/ -type f -exec sed -i "s|pangasathish/my-backend:.*|pangasathish/my-backend:${{ env.VERSION }}|g" {} +
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add helm/
+          git commit -m "Update Docker image tags in Helm to ${{ env.VERSION }}" || echo "No changes to commit"
+          git push
+
+      # Notify on CI Success
+      - name: Notify on CI Success
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"CI completed successfully with version ${{ env.VERSION }}."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+
+
+
+
+
+
+
+
+# name: CI/CD Pipeline
+
+# on:
+#   push:
+#     branches:
+#       - main
+#     paths:
+#       - 'README.md'
+#       - 'backend/**'
+#       - 'frontend/**'
+#       - 'helm/**'
+#       - 'k8s.bak/**'
+#       - 'kubernetes/**'
+
+# env:
+#   SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+#   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+#   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+# jobs:
+#   test-and-build:
+#     runs-on: self-hosted        #runs-on: ubuntu-latest
+#     steps:
+#       # Checkout code
+#       - uses: actions/checkout@v4
+
+#       # Setup Node.js environment
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: '18'
+
+#       # Read frontend version (for Docker tag)
+#       - id: get_version
+#         run: |
+#           VERSION=$(node -p "require('./frontend/package.json').version")
+#           echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+#       # SonarQube scan (using modern official action)
+#       - name: SonarQube Scan
+#         uses: SonarSource/sonarqube-scan-action@v5
+#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#         with:
+#             -Dsonar.projectKey=Vcruitai
+
+#       # - name: SonarQube Quality Gate Check
+#       #   uses: SonarSource/sonarqube-quality-gate-action@v1
+#       #   timeout-minutes: 5
+#       #   env:
+#       #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#       # Notify Mattermost on SonarQube errors
+#       - name: Notify Mattermost on SonarQube issues
+#         if: failure()
+#         run: |
+#           curl -X POST -H 'Content-type: application/json' --data '{"text":"SonarQube test failed in CI."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+
+#       - name: Build backend Docker image
+#         run: |
+#           docker build --network=host -t pangasathish/my-backend:${{ env.VERSION }} ./backend
+
+#       # Build frontend Docker image
+#       - name: Build frontend Docker image
+#         run: |
+#           docker build --network=host -t pangasathish/my-frontend:${{ env.VERSION }} ./frontend
+
+#       # Trivy scan for backend
+#       - name: Scan backend image with Trivy
+#         id: trivy-backend
+#         uses: aquasecurity/trivy-action@0.32.0
+#         with:
+#           image-ref: pangasathish/my-backend:${{ env.VERSION }}
+
+#         if: ${{ failure() && steps.trivy-backend.outcome == 'failure' }}
+#         run: |
+#           curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for backend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+
+#       # Trivy scan for frontend
+#       - name: Scan frontend image with Trivy
+#         id: trivy-frontend
+#         uses: aquasecurity/trivy-action@0.32.0
+#         with:
+#           image-ref: pangasathish/my-frontend:${{ env.VERSION }}
+
+#       - name: Notify Mattermost on Trivy frontend scan errors
+#         if: ${{ failure() && steps.trivy-frontend.outcome == 'failure' }}
+#         run: |
+#           curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for frontend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+
+#       # Login to DockerHub
+#       - name: Login to DockerHub
+#         run: |
+#           echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+
+#       # Push images to DockerHub
+#       - name: Push backend
+#         run: docker push pangasathish/my-backend:${{ env.VERSION }}
+
+#       - name: Push frontend
+#         run: docker push pangasathish/my-frontend:${{ env.VERSION }}
+
+#       # Update image tags in Helm charts only
+#       - name: Update image tags in helm/
+#         run: |
+#           find helm/ -type f -exec sed -i "s|pangasathish/my-frontend:.*|pangasathish/my-frontend:${{ env.VERSION }}|g" {} +
+#           find helm/ -type f -exec sed -i "s|pangasathish/my-backend:.*|pangasathish/my-backend:${{ env.VERSION }}|g" {} +
+#           git config user.name github-actions
+#           git config user.email github-actions@github.com
+#           git add helm/
+#           git commit -m "Update Docker image tags in Helm to ${{ env.VERSION }}" || echo "No changes to commit"
+#           git push
+
+#       - name: Notify on CI Success
+#         if: success()
+#         run: |
+#           curl -X POST -H 'Content-type: application/json' --data '{"text":"CI completed successfully with version ${{ env.VERSION }}."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+#       - name: Notify Mattermost on Trivy backend scan errors
+#       # Build backend Docker image
+
+#       # Optional: Quality Gate (uncomment to use)
+#           args: >
+#           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
