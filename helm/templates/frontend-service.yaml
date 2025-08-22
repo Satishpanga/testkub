@@ -9,6 +9,6 @@ spec:
   ports:
     - name: frontend
       port: {{ .Values.service.frontendPort }}
-      targetPort: 80
+      targetPort: 3000
 
 
