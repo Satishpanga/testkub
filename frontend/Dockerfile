@@ -1,18 +1,23 @@
-# Builder stage: build React app
-FROM node:20-alpine AS builder
+# Stage 1: Build the application
+FROM node:20-alpine AS build
+
 WORKDIR /app
+
 COPY package.json package-lock.json ./
-RUN npm ci --only=production
+RUN npm ci --production
+
 COPY . .
-RUN npm run build
 
-# Production stage: serve with Nginx
-FROM nginx:1.25-alpine
-COPY --from=builder /app/build /usr/share/nginx/html
+RUN npm run build # Or your specific build command (e.g., yarn build)
+
+# Stage 2: Serve the application with a web server (e.g., Nginx)
+FROM nginx:alpine
+
+COPY --from=build /app/dist /usr/share/nginx/html # Adjust '/app/dist' to your build output directory
+
 EXPOSE 80
+
 CMD ["nginx", "-g", "daemon off;"]
-
-
 
 
 
