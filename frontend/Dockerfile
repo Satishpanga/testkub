@@ -1,26 +1,17 @@
-# Stage 1: Build the React app
-FROM node:18-alpine AS build
+# Builder stage: build React app
+FROM node:20-alpine AS builder
 WORKDIR /app
-
-# Optimize layer caching by copying dependency manifest first
 COPY package.json package-lock.json ./
-RUN npm install --frozen-lockfile
-
-# Copy source files and build for production
+RUN npm ci --only=production
 COPY . .
 RUN npm run build
 
-# Stage 2: Serve with Nginx
-FROM nginx:alpine AS production
-
-# Copy compiled build files to Nginx html directory
-COPY --from=build /app/build /usr/share/nginx/html
-
-# Expose web server port
+# Production stage: serve with Nginx
+FROM nginx:1.25-alpine
+COPY --from=builder /app/build /usr/share/nginx/html
 EXPOSE 80
-
-# Start Nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]
+
 
 
 
