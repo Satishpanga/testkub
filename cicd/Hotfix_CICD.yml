@@ -1,0 +1,130 @@
+name: CI/CD Pipeline
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'README.md'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'helm/**'
+      - 'k8s.bak/**'
+      - 'kubernetes/**'
+env:
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+jobs:
+  test-and-build:
+    runs-on: self-hosted
+    steps:
+      # Uncomment if 'jq' is not installed on your runner
+      # - name: Ensure jq is installed
+      #   run: apt-get update && apt-get install -y jq
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Read frontend version (for Docker tag)
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./frontend/package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=Vcruitai
+
+      - name: Fetch SonarQube Quality Gate & Issues Summary
+        id: sonarqube_summary
+        run: |
+          PROJECT_KEY="Vcruitai"
+          SONAR_URL="${{ secrets.SONAR_HOST_URL }}"
+          SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}"
+          AUTH="$SONAR_TOKEN:"
+
+          QG_STATUS=$(curl -s -u "$AUTH" "$SONAR_URL/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status')
+
+          ISSUE_COUNTS=$(curl -s -u "$AUTH" "$SONAR_URL/api/issues/search?projectKeys=$PROJECT_KEY&facets=types" | jq '.facets[0].values')
+          BUGS=$(echo "$ISSUE_COUNTS" | jq -r 'map(select(.val=="BUG") | .count) | add // 0')
+          VULN=$(echo "$ISSUE_COUNTS" | jq -r 'map(select(.val=="VULNERABILITY") | .count) | add // 0')
+          SMELLS=$(echo "$ISSUE_COUNTS" | jq -r 'map(select(.val=="CODE_SMELL") | .count) | add // 0')
+
+          DUPLICATIONS=$(curl -s -u "$AUTH" "$SONAR_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=duplicated_lines_density" | jq -r '.component.measures | map(.value) | first // "0"')
+
+          echo "QG_STATUS=$(echo $QG_STATUS | xargs)" >> $GITHUB_ENV
+          echo "SONAR_BUGS=$(echo $BUGS | xargs)" >> $GITHUB_ENV
+          echo "SONAR_VULN=$(echo $VULN | xargs)" >> $GITHUB_ENV
+          echo "SONAR_SMELLS=$(echo $SMELLS | xargs)" >> $GITHUB_ENV
+          echo "SONAR_DUPLICATIONS=$(echo $DUPLICATIONS | xargs)" >> $GITHUB_ENV
+      - name: Notify Mattermost on SonarQube issues
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"SonarQube test failed in CI."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+      - name: Build backend Docker image
+        run: |
+          docker build --network=host -t pangasathish/my-backend:${{ env.VERSION }} ./backend
+      - name: Build frontend Docker image
+        run: |
+          docker build --network=host -t pangasathish/my-frontend:${{ env.VERSION }} ./frontend
+      - name: Scan backend image with Trivy
+        id: trivy-backend
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: pangasathish/my-backend:${{ env.VERSION }}
+      - name: Notify Mattermost on Trivy backend scan errors
+        if: ${{ always() && steps.trivy-backend.conclusion == 'failure' }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for backend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+      - name: Scan frontend image with Trivy
+        id: trivy-frontend
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: pangasathish/my-frontend:${{ env.VERSION }}
+      - name: Notify Mattermost on Trivy frontend scan errors
+        if: ${{ always() && steps.trivy-frontend.conclusion == 'failure' }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for frontend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
+      - name: Login to DockerHub
+        run: |
+          echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+      - name: Push backend
+        run: docker push pangasathish/my-backend:${{ env.VERSION }}
+      - name: Push frontend
+        run: docker push pangasathish/my-frontend:${{ env.VERSION }}
+      - name: Update image tags in helm/values.yaml
+        run: |
+          # Update frontend tag
+          sed -i "0,/frontend/{s/^\([[:space:]]*tag:[[:space:]]*\).*$/\1${VERSION}/}" helm/values.yaml
+
+          # Update backend tag
+          sed -i "0,/backend/{s/^\([[:space:]]*tag:[[:space:]]*\).*$/\1${VERSION}/}" helm/values.yaml
+
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add helm/
+          git commit -m "Update Docker image tags in Helm to ${{ env.VERSION }}" || echo "No changes to commit"
+          git push
+      - name: Send detailed Mattermost report
+        if: always()
+        run: |
+          LAST_COMMIT=$(git log -1 --pretty=format:"%h %s")
+          CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | paste -sd "," -)
+          AUTHOR=$(git log -1 --pretty=format:'%an')
+          COMMIT_TIME=$(git log -1 --pretty=format:'%ad')
+          QG_STATUS=${QG_STATUS}
+          SONAR_BUGS=${SONAR_BUGS}
+          SONAR_VULN=${SONAR_VULN}
+          SONAR_SMELLS=${SONAR_SMELLS}
+          SONAR_DUPLICATIONS=${SONAR_DUPLICATIONS}
+          SONAR_URL="${{ secrets.SONAR_HOST_URL }}"
+          SONAR_DASHBOARD_LINK="${SONAR_URL}/dashboard?id=Vcruitai"
+          MESSAGE="*Version:* ${VERSION}\n*Quality Gate:* ${QG_STATUS}\n*Bugs:* ${SONAR_BUGS}\n*Vulnerabilities:* ${SONAR_VULN}\n*Code Smells:* ${SONAR_SMELLS}\n*Duplications (% lines):* ${SONAR_DUPLICATIONS}\n*Commit:* ${LAST_COMMIT}\n*Files changed:* ${CHANGED_FILES}\n*Author:* ${AUTHOR} at ${COMMIT_TIME}\n[View full SonarQube dashboard](${SONAR_DASHBOARD_LINK})"
+          PAYLOAD="{\"text\": \"$MESSAGE\"}"
+          curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" ${{ secrets.MATTERMOST_WEBHOOK }}
