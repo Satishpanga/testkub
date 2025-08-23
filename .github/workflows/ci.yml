@@ -59,17 +59,17 @@ jobs:
           QG_STATUS=$(curl -s -u "$AUTH" "$SONAR_URL/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status')
 
           ISSUE_COUNTS=$(curl -s -u "$AUTH" "$SONAR_URL/api/issues/search?projectKeys=$PROJECT_KEY&facets=types" | jq '.facets[0].values')
-          BUGS=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="BUG")|.count) | . // 0')
-          VULN=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="VULNERABILITY")|.count) | . // 0')
-          SMELLS=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="CODE_SMELL")|.count) | . // 0')
+          BUGS=$(echo "$ISSUE_COUNTS" | jq -r 'map(select(.val=="BUG") | .count) | add // 0')
+          VULN=$(echo "$ISSUE_COUNTS" | jq -r 'map(select(.val=="VULNERABILITY") | .count) | add // 0')
+          SMELLS=$(echo "$ISSUE_COUNTS" | jq -r 'map(select(.val=="CODE_SMELL") | .count) | add // 0')
 
           DUPLICATIONS=$(curl -s -u "$AUTH" "$SONAR_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=duplicated_lines_density" | jq -r '.component.measures | map(.value) | first // "0"')
 
-          echo "QG_STATUS=$QG_STATUS" >> $GITHUB_ENV
-          echo "SONAR_BUGS=$BUGS" >> $GITHUB_ENV
-          echo "SONAR_VULN=$VULN" >> $GITHUB_ENV
-          echo "SONAR_SMELLS=$SMELLS" >> $GITHUB_ENV
-          echo "SONAR_DUPLICATIONS=$DUPLICATIONS" >> $GITHUB_ENV
+          echo "QG_STATUS=$(echo $QG_STATUS | xargs)" >> $GITHUB_ENV
+          echo "SONAR_BUGS=$(echo $BUGS | xargs)" >> $GITHUB_ENV
+          echo "SONAR_VULN=$(echo $VULN | xargs)" >> $GITHUB_ENV
+          echo "SONAR_SMELLS=$(echo $SMELLS | xargs)" >> $GITHUB_ENV
+          echo "SONAR_DUPLICATIONS=$(echo $DUPLICATIONS | xargs)" >> $GITHUB_ENV
 
       - name: Notify Mattermost on SonarQube issues
         if: failure()
