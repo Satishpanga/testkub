@@ -21,25 +21,23 @@ jobs:
   test-and-build:
     runs-on: self-hosted
     steps:
-      # Ensure jq is installed
       - name: Ensure jq is installed
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # Checkout code
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # Setup Node.js environment
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      # Read frontend version (for Docker tag)
-      - id: get_version
+      - name: Read frontend version (for Docker tag)
+        id: get_version
         run: |
           VERSION=$(node -p "require('./frontend/package.json').version")
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      # SonarQube scan
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:
@@ -49,7 +47,6 @@ jobs:
           args: >
             -Dsonar.projectKey=Vcruitai
 
-      # Fetch SonarQube Quality Gate & Issues Summary
       - name: Fetch SonarQube Quality Gate & Issues Summary
         id: sonarqube_summary
         run: |
@@ -57,14 +54,11 @@ jobs:
           SONAR_URL="${{ secrets.SONAR_HOST_URL }}"
           SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}"
           AUTH="$SONAR_TOKEN:"
-          # Get Quality Gate Status
           QG_STATUS=$(curl -s -u "$AUTH" "$SONAR_URL/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status')
-          # Get issues by type
           ISSUE_COUNTS=$(curl -s -u "$AUTH" "$SONAR_URL/api/issues/search?projectKeys=$PROJECT_KEY&facets=types" | jq '.facets[0].values')
           BUGS=$(echo $ISSUE_COUNTS | jq 'map(select(.val == "BUG")).count // 0')
           VULN=$(echo $ISSUE_COUNTS | jq 'map(select(.val == "VULNERABILITY")).count // 0')
           SMELLS=$(echo $ISSUE_COUNTS | jq 'map(select(.val == "CODE_SMELL")).count // 0')
-          # Duplications
           DUPLICATIONS=$(curl -s -u "$AUTH" "$SONAR_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=duplicated_lines_density" | jq -r '.component.measures.value // "0"')
           echo "QG_STATUS=$QG_STATUS" >> $GITHUB_ENV
           echo "SONAR_BUGS=$BUGS" >> $GITHUB_ENV
@@ -72,23 +66,19 @@ jobs:
           echo "SONAR_SMELLS=$SMELLS" >> $GITHUB_ENV
           echo "SONAR_DUPLICATIONS=$DUPLICATIONS" >> $GITHUB_ENV
 
-      # Notify Mattermost on SonarQube errors
       - name: Notify Mattermost on SonarQube issues
         if: failure()
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{"text":"SonarQube test failed in CI."}' ${{ secrets.MATTERMOST_WEBHOOK }}
 
-      # Build backend Docker image
       - name: Build backend Docker image
         run: |
           docker build --network=host -t pangasathish/my-backend:${{ env.VERSION }} ./backend
 
-      # Build frontend Docker image
       - name: Build frontend Docker image
         run: |
           docker build --network=host -t pangasathish/my-frontend:${{ env.VERSION }} ./frontend
 
-      # Trivy scan for backend
       - name: Scan backend image with Trivy
         id: trivy-backend
         uses: aquasecurity/trivy-action@0.32.0
@@ -100,7 +90,6 @@ jobs:
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for backend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
 
-      # Trivy scan for frontend
       - name: Scan frontend image with Trivy
         id: trivy-frontend
         uses: aquasecurity/trivy-action@0.32.0
@@ -112,19 +101,16 @@ jobs:
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for frontend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
 
-      # Login to DockerHub
       - name: Login to DockerHub
         run: |
           echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
 
-      # Push images to DockerHub
       - name: Push backend
         run: docker push pangasathish/my-backend:${{ env.VERSION }}
 
       - name: Push frontend
         run: docker push pangasathish/my-frontend:${{ env.VERSION }}
 
-      # Update image tags in Helm charts
       - name: Update image tags in helm/
         run: |
           find helm/ -type f -exec sed -i "s|pangasathish/my-frontend:.*|pangasathish/my-frontend:${{ env.VERSION }}|g" {} +
@@ -135,7 +121,6 @@ jobs:
           git commit -m "Update Docker image tags in Helm to ${{ env.VERSION }}" || echo "No changes to commit"
           git push
 
-      # Send detailed Mattermost CI/CD report
       - name: Send detailed Mattermost report
         if: always()
         run: |
@@ -150,16 +135,6 @@ jobs:
           SONAR_DUPLICATIONS=${SONAR_DUPLICATIONS}
           SONAR_URL="${{ secrets.SONAR_HOST_URL }}"
           SONAR_DASHBOARD_LINK="${SONAR_URL}/dashboard?id=Vcruitai"
-          MESSAGE="**CI/CD Report for Vcruitai**
-*Version:* ${VERSION}
-*Quality Gate:* ${QG_STATUS}
-*Bugs:* ${SONAR_BUGS}
-*Vulnerabilities:* ${SONAR_VULN}
-*Code Smells:* ${SONAR_SMELLS}
-*Duplications (% lines):* ${SONAR_DUPLICATIONS}
-*Commit:* ${LAST_COMMIT}
-*Files changed:* ${CHANGED_FILES}
-*Author:* ${AUTHOR} at ${COMMIT_TIME}
-[View full SonarQube dashboard](${SONAR_DASHBOARD_LINK})"
+          MESSAGE="*Version:* ${VERSION}\n*Quality Gate:* ${QG_STATUS}\n*Bugs:* ${SONAR_BUGS}\n*Vulnerabilities:* ${SONAR_VULN}\n*Code Smells:* ${SONAR_SMELLS}\n*Duplications (% lines):* ${SONAR_DUPLICATIONS}\n*Commit:* ${LAST_COMMIT}\n*Files changed:* ${CHANGED_FILES}\n*Author:* ${AUTHOR} at ${COMMIT_TIME}\n[View full SonarQube dashboard](${SONAR_DASHBOARD_LINK})"
           PAYLOAD="{\"text\": \"$MESSAGE\"}"
           curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" ${{ secrets.MATTERMOST_WEBHOOK }}
