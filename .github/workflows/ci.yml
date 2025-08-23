@@ -116,10 +116,14 @@ jobs:
       - name: Push frontend
         run: docker push pangasathish/my-frontend:${{ env.VERSION }}
 
-      - name: Update image tags in helm/
+      - name: Update image tags in helm/values.yaml
         run: |
-          find helm/ -type f -exec sed -i "s|pangasathish/my-frontend:.*|pangasathish/my-frontend:${{ env.VERSION }}|g" {} +
-          find helm/ -type f -exec sed -i "s|pangasathish/my-backend:.*|pangasathish/my-backend:${{ env.VERSION }}|g" {} +
+          # Update frontend tag
+          sed -i "0,/frontend/{s/^\([[:space:]]*tag:[[:space:]]*\).*$/\1${VERSION}/}" helm/values.yaml
+
+          # Update backend tag
+          sed -i "0,/backend/{s/^\([[:space:]]*tag:[[:space:]]*\).*$/\1${VERSION}/}" helm/values.yaml
+
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add helm/
