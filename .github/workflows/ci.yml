@@ -58,14 +58,14 @@ jobs:
           SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}"
           AUTH="$SONAR_TOKEN:"
 
-          QG_STATUS=$(curl -s -u "$AUTH" "$SONAR_URL/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status')
+          QG_STATUS=$(curl -s -u "$AUTH" "$SONAR_URL/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status' | xargs)
 
           ISSUE_COUNTS=$(curl -s -u "$AUTH" "$SONAR_URL/api/issues/search?projectKeys=$PROJECT_KEY&facets=types" | jq '.facets[0].values')
-          BUGS=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="BUG")|.count) | . // 0')
-          VULN=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="VULNERABILITY")|.count) | . // 0')
-          SMELLS=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="CODE_SMELL")|.count) | . // 0')
 
-          DUPLICATIONS=$(curl -s -u "$AUTH" "$SONAR_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=duplicated_lines_density" | jq -r '.component.measures | map(.value) | first // "0"')
+          BUGS=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="BUG")|.count) | add // 0' | xargs)
+          VULN=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="VULNERABILITY")|.count) | add // 0' | xargs)
+          SMELLS=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="CODE_SMELL")|.count) | add // 0' | xargs)
+          DUPLICATIONS=$(curl -s -u "$AUTH" "$SONAR_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=duplicated_lines_density" | jq -r '.component.measures | map(.value) | first // "0"' | xargs)
 
           echo "QG_STATUS=$QG_STATUS" >> $GITHUB_ENV
           echo "SONAR_BUGS=$BUGS" >> $GITHUB_ENV
@@ -121,8 +121,6 @@ jobs:
       - name: Update image tags in helm/values.yaml
         run: |
           VERSION=${{ env.VERSION }}
-
-          # Update both frontend & backend tags safely using yq
           yq e -i ".frontend.image.tag = \"${VERSION}\"" helm/values.yaml
           yq e -i ".backend.image.tag = \"${VERSION}\"" helm/values.yaml
 
