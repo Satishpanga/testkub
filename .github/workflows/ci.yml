@@ -21,7 +21,7 @@ jobs:
   test-and-build:
     runs-on: self-hosted
     steps:
-      # REMOVE this if you've already installed jq on your runner!
+      # If jq is NOT installed on your runner, you may temporarily un-comment below:
       # - name: Ensure jq is installed
       #   run: apt-get update && apt-get install -y jq
 
