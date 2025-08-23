@@ -29,10 +29,11 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install yq (YAML processor)
+      - name: Install yq locally
         run: |
-          wget https://github.com/mikefarah/yq/releases/download/v4.44.2/yq_linux_amd64 -O /usr/bin/yq
-          chmod +x /usr/bin/yq
+          wget https://github.com/mikefarah/yq/releases/download/v4.44.2/yq_linux_amd64 -O $HOME/yq
+          chmod +x $HOME/yq
+          echo "$HOME" >> $GITHUB_PATH
 
       - name: Read frontend version (for Docker tag)
         id: get_version
@@ -121,7 +122,7 @@ jobs:
         run: |
           VERSION=${{ env.VERSION }}
 
-          # Update both frontend & backend image tags safely
+          # Update both frontend & backend tags safely using yq
           yq e -i ".frontend.image.tag = \"${VERSION}\"" helm/values.yaml
           yq e -i ".backend.image.tag = \"${VERSION}\"" helm/values.yaml
 
