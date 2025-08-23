@@ -21,7 +21,7 @@ jobs:
   test-and-build:
     runs-on: self-hosted
     steps:
-      # Optionally enable if jq is missing
+      # Uncomment if you need to install jq
       # - name: Ensure jq is installed
       #   run: apt-get update && apt-get install -y jq
 
