@@ -118,16 +118,18 @@ jobs:
 
       - name: Update image tags in helm/values.yaml
         run: |
+          VERSION=${{ env.VERSION }}
+
           # Update frontend tag
-          sed -i "0,/frontend/{s/^\([[:space:]]*tag:[[:space:]]*\).*$/\1${VERSION}/}" helm/values.yaml
+          sed -i "/frontend:/,/repository:/ s/^\([[:space:]]*tag:[[:space:]]*\).*$/\1${VERSION}/" helm/values.yaml
 
           # Update backend tag
-          sed -i "0,/backend/{s/^\([[:space:]]*tag:[[:space:]]*\).*$/\1${VERSION}/}" helm/values.yaml
+          sed -i "/backend:/,/repository:/ s/^\([[:space:]]*tag:[[:space:]]*\).*$/\1${VERSION}/" helm/values.yaml
 
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add helm/
-          git commit -m "Update Docker image tags in Helm to ${{ env.VERSION }}" || echo "No changes to commit"
+          git commit -m "Update Docker image tags in Helm to ${VERSION}" || echo "No changes to commit"
           git push
 
       - name: Send detailed Mattermost report
