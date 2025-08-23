@@ -1,32 +1,13 @@
-# -------- Stage 1: Build the App --------
-FROM node:18.20.8-slim AS builder
-
+FROM node:18-alpine AS build
 WORKDIR /app
-
-# Copy package files and install deps
-COPY package.json yarn.lock* package-lock.json* ./
-
-RUN npm install
-
-# Copy the rest of the code
+COPY package*.json ./
+RUN npm ci --only=production
 COPY . .
-
-# Build the static files (e.g., React/Vite)
 RUN npm run build
 
-# -------- Stage 2: Serve with Nginx --------
-FROM nginx:1.25-alpine AS production
-
-# Remove default nginx index page
+FROM nginx:alpine
 RUN rm -rf /usr/share/nginx/html/*
-
-# Copy built static files from the build stage
-COPY --from=builder /app/build /usr/share/nginx/html
-
-# Optional: custom Nginx config (see below)
+COPY --from=build /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port
-EXPOSE 80
-
+EXPOSE 3000
 CMD ["nginx", "-g", "daemon off;"]

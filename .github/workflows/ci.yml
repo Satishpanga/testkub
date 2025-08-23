@@ -54,12 +54,12 @@ jobs:
       # Build backend Docker image
       - name: Build backend Docker image
         run: |
-          DOCKER_BUILDKIT=1 docker build --no-cache --network=host -t pangasathish/my-backend:${{ env.VERSION }} ./backend
+          docker build --no-cache --network=host -t pangasathish/my-backend:${{ env.VERSION }} ./backend
 
       # Build frontend Docker image
       - name: Build frontend Docker image
         run: |
-          DOCKER_BUILDKIT=1 docker build --no-cache --network=host -t pangasathish/my-frontend:${{ env.VERSION }} ./frontend
+          docker build --no-cache --network=host -t pangasathish/my-frontend:${{ env.VERSION }} ./frontend
 
       # Trivy scan for backend
       - name: Scan backend image with Trivy
