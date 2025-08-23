@@ -21,7 +21,7 @@ jobs:
   test-and-build:
     runs-on: self-hosted
     steps:
-      # Uncomment if you need to install jq
+      # Uncomment if 'jq' is not installed on your runner
       # - name: Ensure jq is installed
       #   run: apt-get update && apt-get install -y jq
 
@@ -59,9 +59,9 @@ jobs:
           QG_STATUS=$(curl -s -u "$AUTH" "$SONAR_URL/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status')
 
           ISSUE_COUNTS=$(curl -s -u "$AUTH" "$SONAR_URL/api/issues/search?projectKeys=$PROJECT_KEY&facets=types" | jq '.facets[0].values')
-          BUGS=$(echo $ISSUE_COUNTS | jq 'map(select(.val=="BUG")|.count) | if length>0 then . else 0 end')
-          VULN=$(echo $ISSUE_COUNTS | jq 'map(select(.val=="VULNERABILITY")|.count) | if length>0 then . else 0 end')
-          SMELLS=$(echo $ISSUE_COUNTS | jq 'map(select(.val=="CODE_SMELL")|.count) | if length>0 then . else 0 end')
+          BUGS=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="BUG")|.count) | . // 0')
+          VULN=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="VULNERABILITY")|.count) | . // 0')
+          SMELLS=$(echo $ISSUE_COUNTS | jq -r 'map(select(.val=="CODE_SMELL")|.count) | . // 0')
 
           DUPLICATIONS=$(curl -s -u "$AUTH" "$SONAR_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=duplicated_lines_density" | jq -r '.component.measures | map(.value) | first // "0"')
 
