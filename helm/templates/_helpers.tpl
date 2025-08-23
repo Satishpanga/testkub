@@ -2,6 +2,10 @@
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end }}
 
+{{- define "my-app.fullname" -}}
+{{- include "my-fullstack.name" . | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
 {{- define "my-frontend.fullname" -}}
 {{- printf "%s-frontend" (include "my-fullstack.name" .) | trunc 63 | trimSuffix "-" -}}
 {{- end }}
