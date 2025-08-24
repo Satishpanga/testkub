@@ -1,5 +1,4 @@
 name: CI/CD Pipeline
-
 on:
   push:
     branches:
@@ -11,36 +10,30 @@ on:
       - 'helm/**'
       - 'k8s.bak/**'
       - 'kubernetes/**'
-
 env:
   SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
 jobs:
   test-and-build:
     runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup Node.js environment
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-
       - name: Install yq locally
         run: |
           wget https://github.com/mikefarah/yq/releases/download/v4.44.2/yq_linux_amd64 -O $HOME/yq
           chmod +x $HOME/yq
           echo "$HOME" >> $GITHUB_PATH
-
       - name: Read frontend version (for Docker tag)
         id: get_version
         run: |
           VERSION=$(node -p "require('./frontend/package.json').version")
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:
@@ -72,57 +65,41 @@ jobs:
           echo "SONAR_VULN=$VULN" >> $GITHUB_ENV
           echo "SONAR_SMELLS=$SMELLS" >> $GITHUB_ENV
           echo "SONAR_DUPLICATIONS=$DUPLICATIONS" >> $GITHUB_ENV
-
       - name: Notify Mattermost on SonarQube issues
         if: failure()
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"❌ SonarQube test failed in CI."}' ${{ secrets.MATTERMOST_WEBHOOK }}
-
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"SonarQube test failed in CI."}' ${{ secrets.MATTERMOST_WEBHOOK }}
       - name: Build backend Docker image
         run: |
           docker build --network=host -t pangasathish/my-backend:${{ env.VERSION }} ./backend
-
       - name: Build frontend Docker image
         run: |
           docker build --network=host -t pangasathish/my-frontend:${{ env.VERSION }} ./frontend
-
-      # ---- Trivy Scans with continue-on-error ----
       - name: Scan backend image with Trivy
         id: trivy-backend
         uses: aquasecurity/trivy-action@0.32.0
         with:
           image-ref: pangasathish/my-backend:${{ env.VERSION }}
-        continue-on-error: true
-
       - name: Notify Mattermost on Trivy backend scan errors
-        if: steps.trivy-backend.conclusion == 'failure'
+        if: ${{ always() && steps.trivy-backend.conclusion == 'failure' }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"⚠️ Trivy scan failed for backend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
-
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for backend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
       - name: Scan frontend image with Trivy
         id: trivy-frontend
         uses: aquasecurity/trivy-action@0.32.0
         with:
           image-ref: pangasathish/my-frontend:${{ env.VERSION }}
-        continue-on-error: true
-
       - name: Notify Mattermost on Trivy frontend scan errors
-        if: steps.trivy-frontend.conclusion == 'failure'
+        if: ${{ always() && steps.trivy-frontend.conclusion == 'failure' }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"⚠️ Trivy scan failed for frontend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
-
-      # ---- DockerHub ----
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Trivy scan failed for frontend image."}' ${{ secrets.MATTERMOST_WEBHOOK }}
       - name: Login to DockerHub
         run: |
           echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-
       - name: Push backend
         run: docker push pangasathish/my-backend:${{ env.VERSION }}
-
       - name: Push frontend
         run: docker push pangasathish/my-frontend:${{ env.VERSION }}
-
-      # ---- Helm Update ----
       - name: Update image tags in helm/values.yaml
         run: |
           VERSION=${{ env.VERSION }}
@@ -134,8 +111,6 @@ jobs:
           git add helm/
           git commit -m "Update Docker image tags in Helm to ${VERSION}" || echo "No changes to commit"
           git push
-
-      # ---- Final Mattermost Report ----
       - name: Send detailed Mattermost report
         if: always()
         run: |
